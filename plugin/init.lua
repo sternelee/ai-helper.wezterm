@@ -10,7 +10,8 @@ local default_config = {
     },
     system_prompt = "you are an assistant that specializes in CLI and macOS commands. "
         .. "you will be brief and to the point, if asked for commands print them in a way that's easy to copy, "
-        .. "otherwise just answer the question. concatenate commands with && or || for ease of use. ",
+        .. "otherwise just answer the question. concatenate commands with && or || for ease of use. "
+        .. "structure your output in a JSON schema with 2 fields: message and command",
     timeout = 30, -- seconds
     show_loading = true,
 }
@@ -25,7 +26,7 @@ local function merge_config(user_config)
         for k, v in pairs(user_config) do
             config[k] = v
             if k == "system_prompt" then
-                config[k] = v .. "\n\nstructure your output in a JSON schema with 2 fields: message and command"
+                config[k] = v .. " structure your output in a JSON schema with 2 fields: message and command"
             end
         end
     end
@@ -91,15 +92,7 @@ local function handle_ai_request(window, pane, prompt, config)
         show_loading(pane, true)
     end
 
-    -- Check if LMS binary exists
-    local lms_exists = wezterm.run_child_process({ "test", "-f", config.lms_path })
-    if not lms_exists then
-        if config.show_loading then
-            pane:inject_output("\r\n❌ Error: LM Studio CLI not found at " .. config.lms_path)
-        end
-        return
-    end
-
+    wezterm.log_info("AI Helper: Sending request with system prompt: ", config.system_prompt)
     local success, stdout, stderr = wezterm.run_child_process({
         config.lms_path,
         "chat",
