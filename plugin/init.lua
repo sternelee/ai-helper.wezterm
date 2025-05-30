@@ -10,8 +10,7 @@ local default_config = {
     },
     system_prompt = "you are an assistant that specializes in CLI and macOS commands. "
         .. "you will be brief and to the point, if asked for commands print them in a way that's easy to copy, "
-        .. "otherwise just answer the question. concatenate commands with && or || for ease of use. "
-        .. "structure your output in a JSON schema with 2 fields: message and command",
+        .. "otherwise just answer the question. concatenate commands with && or || for ease of use. ",
     timeout = 30, -- seconds
     show_loading = true,
 }
@@ -25,6 +24,9 @@ local function merge_config(user_config)
     if user_config then
         for k, v in pairs(user_config) do
             config[k] = v
+            if k == "system_prompt" then
+                config[k] = v .. "\n\nstructure your output in a JSON schema with 2 fields: message and command"
+            end
         end
     end
     return config
@@ -40,14 +42,14 @@ end
 -- Clean up AI response by removing markdown code fences
 local function clean_response(response)
     if not response then return "" end
-    
+
     -- Remove code fences
     response = response:gsub("```%w*\n?", "")
     response = response:gsub("```", "")
-    
+
     -- Trim whitespace
     response = response:match("^%s*(.-)%s*$")
-    
+
     return response
 end
 
@@ -55,11 +57,11 @@ end
 local function parse_ai_response(response)
     local cleaned = clean_response(response)
     local json = wezterm.json_parse(cleaned)
-    
+
     if json and type(json) == "table" then
         return json
     end
-    
+
     -- Fallback: treat as plain text message
     return {
         message = cleaned,
@@ -80,7 +82,7 @@ local function handle_ai_request(window, pane, prompt, config)
     end
 
     -- Check if LMS binary exists
-    local lms_exists = wezterm.run_child_process({"test", "-f", config.lms_path})
+    local lms_exists = wezterm.run_child_process({ "test", "-f", config.lms_path })
     if not lms_exists then
         if config.show_loading then
             pane:inject_output("\r\n❌ Error: LM Studio CLI not found at " .. config.lms_path)
@@ -98,16 +100,16 @@ local function handle_ai_request(window, pane, prompt, config)
 
     if success then
         local response = parse_ai_response(stdout)
-        
+
         -- Display message if present
         if response.message and response.message ~= "" then
             pane:inject_output("\r\n💬 " .. response.message:gsub("[\n]", "\r\n"))
         end
-        
+
         -- Clear current line and send command if present
         pane:send_text("\u{15}") -- Ctrl+U to clear line
         pane:send_text("\r")
-        
+
         if response.command and response.command ~= "" then
             pane:send_text(response.command)
         end
@@ -119,7 +121,7 @@ local function handle_ai_request(window, pane, prompt, config)
             wezterm.log_error("AI Helper stderr: ", stderr)
         end
         pane:inject_output("\r\n" .. error_msg)
-        
+
         -- Still clear the line for user convenience
         pane:send_text("\u{15}")
         pane:send_text("\r")
@@ -129,13 +131,13 @@ end
 -- Main function to apply configuration
 local function apply_to_config(wezterm_config, user_config)
     local config = merge_config(user_config)
-    
+
     -- Validate required configuration
     if not config.lms_path then
         wezterm.log_error("AI Helper: lms_path is required in configuration")
         return
     end
-    
+
     if wezterm_config.keys == nil then
         wezterm_config.keys = {}
     end
@@ -154,7 +156,7 @@ local function apply_to_config(wezterm_config, user_config)
             end),
         }),
     })
-    
+
     wezterm.log_info("AI Helper plugin loaded with model: " .. config.model)
 end
 
