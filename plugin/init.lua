@@ -41,7 +41,9 @@ end
 
 -- Clean up AI response by removing markdown code fences
 local function clean_response(response)
-    if not response then return "" end
+    if not response then
+        return ""
+    end
 
     -- Remove code fences
     response = response:gsub("```%w*\n?", "")
@@ -56,7 +58,15 @@ end
 -- Parse JSON response with better error handling
 local function parse_ai_response(response)
     local cleaned = clean_response(response)
-    local json = wezterm.json_parse(cleaned)
+    local ok, json = pcall(wezterm.json_parse, cleaned)
+
+    if not ok then
+        wezterm.log_error("AI Helper: Failed to parse JSON response: ", cleaned)
+        return {
+            message = "❌ Error parsing AI response \r\n" .. cleaned,
+            command = nil,
+        }
+    end
 
     if json and type(json) == "table" then
         return json
@@ -65,7 +75,7 @@ local function parse_ai_response(response)
     -- Fallback: treat as plain text message
     return {
         message = cleaned,
-        command = nil
+        command = nil,
     }
 end
 
@@ -94,8 +104,10 @@ local function handle_ai_request(window, pane, prompt, config)
         config.lms_path,
         "chat",
         config.model,
-        "-s", config.system_prompt,
-        "-p", prompt,
+        "-s",
+        config.system_prompt,
+        "-p",
+        prompt,
     })
 
     if success then
