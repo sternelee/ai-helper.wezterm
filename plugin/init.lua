@@ -1,6 +1,35 @@
 local wezterm = require("wezterm")
 local act = wezterm.action
 
+local function findPluginPackagePath(myProject)
+    local separator = package.config:sub(1, 1) == "\\" and "\\" or "/"
+    for _, v in ipairs(wezterm.plugin.list()) do
+        if v.url == myProject then
+            return v.plugin_dir .. separator .. "plugin" .. separator .. "?.lua"
+        end
+    end
+end
+
+package.path = package.path .. ";" .. findPluginPackagePath("file:///Users/mickl/Sources/ai-helper.wezterm")
+
+local io = require("io")
+local ok, handle = pcall(io.popen, "/opt/homebrew/bin/luarocks path --bin 2>&1")
+if ok and handle then
+    local result = handle:read("*a")
+    local exit_code = handle:close()
+
+    if exit_code then
+        local luarocks_path = result:match("LUA_PATH=(.-)\n")
+        if luarocks_path then
+            package.path = package.path .. ";" .. luarocks_path
+        end
+    else
+        wezterm.log_info("AI Helper: luarocks path command failed (luarocks may not be installed)")
+    end
+else
+    wezterm.log_info("AI Helper: luarocks not found or failed to execute (continuing without luarocks dependencies)")
+end
+
 -- Default configuration
 local default_config = {
     model = "google/gemma-3-4b",
@@ -14,7 +43,20 @@ local default_config = {
         .. "structure your output in a JSON schema with 2 fields: message and command",
     timeout = 30, -- seconds
     show_loading = true,
+    type = "local",
+    api_key = nil, -- Only used for Google API
 }
+
+local function get_generator(config)
+    if config.type == "google" then
+        return require("generators.google").generate_content
+    elseif config.type == "local" then
+        return require("generators.local_lm_studio").generate_content
+    else
+        wezterm.log_error("AI Helper: Unsupported type: ", config.type)
+        return nil
+    end
+end
 
 -- Merge user config with defaults
 local function merge_config(user_config)
@@ -92,18 +134,16 @@ local function handle_ai_request(window, pane, prompt, config)
         show_loading(pane, true)
     end
 
-    wezterm.log_info("AI Helper: Sending request with system prompt: ", config.system_prompt)
-    local success, stdout, stderr = wezterm.run_child_process({
-        config.lms_path,
-        "chat",
-        config.model,
-        "-s",
-        config.system_prompt,
-        "-p",
-        prompt,
-    })
+    local generator = get_generator(config)
+    if generator == nil then
+        wezterm.log_error("AI Helper: No valid generator found for type: ", config.type)
+        return
+    end
+    local success, stdout, err = generator(config, prompt)
+    wezterm.log_info("AI Helper: AI request completed with success: ", success)
 
     if success then
+        wezterm.log_info("AI Helper: AI response received, response: ", stdout)
         local response = parse_ai_response(stdout)
 
         -- Display message if present
@@ -121,9 +161,9 @@ local function handle_ai_request(window, pane, prompt, config)
     else
         -- Handle errors
         local error_msg = "❌ AI request failed"
-        if stderr and stderr ~= "" then
-            error_msg = error_msg .. ": " .. stderr
-            wezterm.log_error("AI Helper stderr: ", stderr)
+        if err and err ~= "" then
+            error_msg = error_msg .. ": " .. err
+            wezterm.log_error("AI Helper err: ", err)
         end
         pane:inject_output("\r\n" .. error_msg)
 
@@ -138,7 +178,7 @@ local function apply_to_config(wezterm_config, user_config)
     local config = merge_config(user_config)
 
     -- Validate required configuration
-    if not config.lms_path then
+    if config.type == "local" and not config.lms_path then
         wezterm.log_error("AI Helper: lms_path is required in configuration")
         return
     end
