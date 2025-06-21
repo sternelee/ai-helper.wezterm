@@ -47,11 +47,15 @@ local default_config = {
     api_key = nil, -- Only used for Google API
 }
 
-local function get_generator(config)
+local function get_provider(config)
     if config.type == "google" then
-        return require("generators.google").generate_content
+        return require("generators.google")
     elseif config.type == "local" then
-        return require("generators.local_lm_studio").generate_content
+        return require("generators.local_lm_studio")
+    elseif config.type == "ollama" then
+        return require("generators.ollama")
+    elseif config.type == "http" then
+        return require("generators.http")
     else
         wezterm.log_error("AI Helper: Unsupported type: ", config.type)
         return nil
@@ -134,12 +138,13 @@ local function handle_ai_request(window, pane, prompt, config)
         show_loading(pane, true)
     end
 
-    local generator = get_generator(config)
-    if generator == nil then
-        wezterm.log_error("AI Helper: No valid generator found for type: ", config.type)
+    local provider = get_provider(config)
+    if not provider then
+        wezterm.log_error("AI Helper: No valid provider found for type: ", config.type)
         return
     end
-    local success, stdout, err = generator(config, prompt)
+
+    local success, stdout, err = provider.generate_content(config, prompt)
     wezterm.log_info("AI Helper: AI request completed with success: ", success)
 
     if success then
@@ -177,6 +182,17 @@ end
 local function apply_to_config(wezterm_config, user_config)
     local config = merge_config(user_config)
 
+    local provider = get_provider(config)
+    if not provider then
+        wezterm.log_error("AI Helper: No valid generator found for type: ", config.type)
+        return
+    end
+
+    if not provider.validate_config(config) then
+        wezterm.log_error("AI Helper: Invalid configuration")
+        return
+    end
+
     -- Validate required configuration
     if config.type == "local" and not config.lms_path then
         wezterm.log_error("AI Helper: lms_path is required in configuration")
@@ -202,7 +218,7 @@ local function apply_to_config(wezterm_config, user_config)
         }),
     })
 
-    wezterm.log_info("AI Helper plugin loaded with model: " .. config.model)
+    wezterm.log_info("AI Helper plugin loaded with model: " .. config.model .. " and type: " .. config.type)
 end
 
 return {

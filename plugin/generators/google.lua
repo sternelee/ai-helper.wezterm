@@ -1,4 +1,5 @@
 local dkjson = require("dkjson")
+local wezterm = require("wezterm")
 
 local function generate_content(config, prompt)
     local request_body = {
@@ -77,6 +78,15 @@ local function generate_content(config, prompt)
     return true, response_data.candidates[1].content.parts[1].text, nil
 end
 
+local function validate_config(config)
+    if not config.api_key then
+        wezterm.log_error("AI Helper: api_key is required in configuration")
+        return false
+    end
+    return true
+end
+
 return {
     generate_content = generate_content,
+    validate_config = validate_config,
 }
