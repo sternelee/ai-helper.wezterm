@@ -1,7 +1,7 @@
 # AI Helper for WezTerm
 
 I really liked Warp but due to my company's AI policy I had to move to something else. WezTerm is 90% of what I need and I decided to build the remaining 10% myself.
-And so here it is: a very simple WezTerm plugin that lets you ask an AI for CLI help using either LM Studio (local) or Google Gemini (cloud).
+And so here it is: a very simple WezTerm plugin that lets you ask an AI for CLI help using multiple providers: LM Studio (local), Google Gemini (cloud), Ollama (local/remote), or any OpenAPI-compatible service.
 
 ## Setup
 
@@ -31,6 +31,39 @@ ai_helper.apply_to_config(config, {
 })
 ```
 
+### Option 3: Ollama (Local or Remote)
+1. Install [Ollama](https://ollama.ai/) and have it running
+2. For local Ollama:
+
+```lua
+local ai_helper = require("path.to.plugin")
+local config = wezterm.config_builder()
+ai_helper.apply_to_config(config, {
+    type = "ollama",
+    ollama_path = "ollama", -- or full path like "/usr/local/bin/ollama"
+    model = "llama2", -- or any model you have installed
+})
+```
+
+3. For remote Ollama, set the `OLLAMA_HOST` environment variable or configure it in your system.
+
+### Option 4: OpenAPI-compatible HTTP Service
+Works with OpenAI, Anthropic, local servers, or any service using the OpenAI API format:
+
+```lua
+local ai_helper = require("path.to.plugin")
+local config = wezterm.config_builder()
+ai_helper.apply_to_config(config, {
+    type = "http",
+    api_url = "https://api.openai.com/v1/chat/completions", -- or your service URL
+    api_key = "your-api-key", -- if required
+    model = "gpt-4", -- model name
+    headers = { -- optional custom headers
+        ["X-Custom-Header"] = "value"
+    }
+})
+```
+
 ## Usage
 
 Press `Cmd+I` (default keybinding), type your question, get help.
@@ -43,7 +76,7 @@ All configuration options with their defaults:
 
 ```lua
 ai_helper.apply_to_config(config, {
-    -- Provider type: "local" for LM Studio, "google" for Gemini (default: "local")
+    -- Provider type: "local", "google", "ollama", or "http" (default: "local")
     type = "local",
     
     -- For local LM Studio: Path to LM Studio CLI binary (required when type = "local")
@@ -51,6 +84,17 @@ ai_helper.apply_to_config(config, {
     
     -- For Google Gemini: API key (required when type = "google")
     api_key = "your-google-api-key",
+    
+    -- For Ollama: Path to ollama binary (required when type = "ollama")
+    ollama_path = "ollama", -- or "/usr/local/bin/ollama"
+    
+    -- For HTTP: API endpoint URL (required when type = "http")
+    api_url = "https://api.openai.com/v1/chat/completions",
+    
+    -- For HTTP: Optional custom headers
+    headers = {
+        ["X-Custom-Header"] = "value"
+    },
     
     -- AI model to use (default: "google/gemma-3-4b")
     model = "your-model-name",
@@ -76,10 +120,13 @@ ai_helper.apply_to_config(config, {
 
 ### Configuration Details
 
-- **`type`**: Choose between "local" (LM Studio) or "google" (Gemini)
+- **`type`**: Choose between "local" (LM Studio), "google" (Gemini), "ollama" (Ollama), or "http" (OpenAPI-compatible)
 - **`lms_path`** (required for local): Full path to the LM Studio CLI binary
-- **`api_key`** (required for google): Your Google API key for Gemini
-- **`model`**: The AI model name (for LM Studio) or Gemini model
+- **`api_key`** (required for google/http): API key for the service
+- **`ollama_path`** (required for ollama): Path to the ollama binary (e.g., "ollama" or "/usr/local/bin/ollama")
+- **`api_url`** (required for http): Full URL to the API endpoint (e.g., "https://api.openai.com/v1/chat/completions")
+- **`headers`** (optional for http): Custom HTTP headers as key-value pairs
+- **`model`**: The AI model name
 - **`keybinding`**: Key combination to trigger the AI helper
   - `key`: The key to press
   - `mods`: Modifier keys (e.g., "SUPER", "CTRL", "ALT", "SHIFT")
